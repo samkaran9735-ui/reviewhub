@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import HelpWidget from './components/HelpWidget'
 
 export const metadata: Metadata = {
   title: 'GetSmartReviews — Honest Product Reviews & Price Comparison India',
@@ -34,7 +35,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        {children}
+        <HelpWidget />
+      </body>
     </html>
   )
 }
