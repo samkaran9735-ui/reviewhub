@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { supabase } from '../../lib/supabase'
 
 const products = [
   'Sony WH-1000XM6',
@@ -19,12 +20,46 @@ export default function SubmitReviewPage() {
   const [stars, setStars] = useState(5)
   const [submitted, setSubmitted] = useState(false)
   const [scores, setScores] = useState({ q1: 9, q2: 9, q3: 8, q4: 8, q5: 8 })
+  const [user, setUser] = useState<{ email?: string } | null | undefined>(undefined)
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null)
+    })
+    supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null)
+    })
+  }, [])
 
   const scoreLabels = ['q1', 'q2', 'q3', 'q4', 'q5']
   const scoreNames = ['Sound / Performance', 'Design & Build', 'Battery / Durability', 'Value for money', 'Overall experience']
   const starLabels = ['', 'Terrible', 'Poor', 'Average', 'Good', 'Excellent!']
 
   const avg = (Object.values(scores).reduce((a, b) => a + b, 0) / 5).toFixed(1)
+
+  if (user === undefined) return null // loading
+
+  if (user === null) {
+    return (
+      <div style={{ minHeight: '100vh', background: '#f8f8f6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: '20px', padding: '48px', textAlign: 'center', maxWidth: '420px', width: '100%' }}>
+          <div style={{ fontSize: '40px', marginBottom: '16px' }}>✍️</div>
+          <h2 style={{ fontSize: '20px', fontWeight: '500', color: '#1a1a1a', marginBottom: '8px' }}>Sign in to submit a review</h2>
+          <p style={{ fontSize: '14px', color: '#666', lineHeight: '1.6', marginBottom: '28px' }}>
+            You need to be logged in to share your review. Join thousands of honest reviewers helping others buy smarter.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <Link href="/login" style={{ display: 'block', padding: '12px', background: '#378ADD', color: '#fff', borderRadius: '10px', fontSize: '15px', textDecoration: 'none', fontWeight: '500' }}>
+              Sign in
+            </Link>
+            <Link href="/login" style={{ display: 'block', padding: '12px', background: '#fff', color: '#378ADD', border: '1px solid #378ADD', borderRadius: '10px', fontSize: '15px', textDecoration: 'none' }}>
+              Create an account
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   if (submitted) {
     return (
@@ -65,9 +100,19 @@ export default function SubmitReviewPage() {
           <Link href="/compare" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Compare</Link>
           <Link href="/submit-review" style={{ fontSize: '14px', color: '#378ADD', textDecoration: 'none', fontWeight: '500' }}>Submit review</Link>
         </div>
-        <button style={{ padding: '8px 18px', background: '#378ADD', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '14px', cursor: 'pointer' }}>
-          Sign in
-        </button>
+        {user ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '13px', color: '#666' }}>👋 {user.email}</span>
+            <button onClick={async () => { await supabase.auth.signOut(); setUser(null) }}
+              style={{ padding: '8px 16px', background: '#fff', color: '#378ADD', border: '1px solid #378ADD', borderRadius: '8px', fontSize: '13px', cursor: 'pointer' }}>
+              Sign out
+            </button>
+          </div>
+        ) : (
+          <Link href="/login" style={{ padding: '8px 18px', background: '#378ADD', color: '#fff', borderRadius: '8px', fontSize: '14px', textDecoration: 'none' }}>
+            Sign in
+          </Link>
+        )}
       </nav>
 
       <div style={{ maxWidth: '760px', margin: '0 auto', padding: '24px' }}>
