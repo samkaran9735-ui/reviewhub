@@ -30,13 +30,19 @@ export default function LoginPage() {
       }
 
     } else if (mode === 'signup') {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: { data: { name } }
       })
       if (error) {
-        setError(error.message)
+        if (error.message.toLowerCase().includes('already registered') || error.message.toLowerCase().includes('already exists')) {
+          setError('An account with this email already exists. Please sign in instead.')
+        } else {
+          setError(error.message)
+        }
+      } else if (data.user && data.user.identities && data.user.identities.length === 0) {
+        setError('An account with this email already exists. Please sign in instead.')
       } else {
         setMessage('Account created! Please check your email to verify your account.')
       }

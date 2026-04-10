@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabase'
 
 type Product = {
@@ -27,8 +28,13 @@ export default function HomePage() {
   const [user, setUser] = useState<User | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [wishlist, setWishlist] = useState<Set<string>>(new Set())
+  const router = useRouter()
 
   const toggleWishlist = (id: string) => {
+    if (!user) {
+      router.push('/login')
+      return
+    }
     setWishlist(prev => {
       const next = new Set(prev)
       next.has(id) ? next.delete(id) : next.add(id)

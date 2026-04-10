@@ -1,7 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { supabase } from '../../lib/supabase'
 
 const allProducts = [
   { id: 1, name: 'Sony WH-1000XM6', brand: 'Sony', category: 'Tech', emoji: '🎧', score: 9.6, reviews: 3841, price: 24990 },
@@ -24,8 +26,24 @@ export default function BrowsePage() {
   const [sort, setSort] = useState('score')
   const [maxPrice, setMaxPrice] = useState(200000)
   const [wishlist, setWishlist] = useState<Set<number>>(new Set())
+  const [user, setUser] = useState<{ email?: string } | null>(null)
+  const router = useRouter()
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) setUser(session.user)
+    })
+    supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) setUser(session.user)
+      else setUser(null)
+    })
+  }, [])
 
   const toggleWishlist = (id: number) => {
+    if (!user) {
+      router.push('/login')
+      return
+    }
     setWishlist(prev => {
       const next = new Set(prev)
       next.has(id) ? next.delete(id) : next.add(id)
@@ -60,9 +78,19 @@ export default function BrowsePage() {
           <Link href="/compare" style={{fontSize: '14px', color: '#666', textDecoration: 'none'}}>Compare</Link>
           <Link href="/submit-review" style={{fontSize: '14px', color: '#666', textDecoration: 'none'}}>Submit review</Link>
         </div>
-        <button style={{padding: '8px 18px', background: '#378ADD', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '14px', cursor: 'pointer'}}>
-          Sign in
-        </button>
+        {user ? (
+          <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
+            <span style={{fontSize: '13px', color: '#666'}}>👋 {user.email}</span>
+            <button onClick={async () => { await supabase.auth.signOut(); setUser(null) }}
+              style={{padding: '8px 16px', background: '#fff', color: '#378ADD', border: '1px solid #378ADD', borderRadius: '8px', fontSize: '13px', cursor: 'pointer'}}>
+              Sign out
+            </button>
+          </div>
+        ) : (
+          <Link href="/login" style={{padding: '8px 18px', background: '#378ADD', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '14px', cursor: 'pointer', textDecoration: 'none'}}>
+            Sign in
+          </Link>
+        )}
       </nav>
 
       <div style={{display: 'grid', gridTemplateColumns: '220px 1fr', gap: '0', minHeight: 'calc(100vh - 57px)'}}>
