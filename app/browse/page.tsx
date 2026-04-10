@@ -177,10 +177,10 @@ export default function BrowsePage() {
           <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '14px'}}>
             {filtered.map(product => (
               <div key={product.id} style={{background: '#fff', border: '1px solid #eee', borderRadius: '12px', overflow: 'hidden'}}>
-                <div style={{background: '#f8f8f6', height: '110px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '44px', position: 'relative'}}>
+                <Link href={`/product/${product.id}`} style={{background: '#f8f8f6', height: '110px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '44px', position: 'relative', textDecoration: 'none', cursor: 'pointer'}}>
                   {product.emoji}
                   <button
-                    onClick={() => toggleWishlist(product.id)}
+                    onClick={(e) => { e.preventDefault(); toggleWishlist(product.id) }}
                     style={{position: 'absolute', top: '8px', right: '8px', background: 'none', border: 'none', cursor: 'pointer', padding: '2px', lineHeight: 1}}
                     title={wishlist.has(product.id) ? 'Remove from wishlist' : 'Add to wishlist'}
                   >
@@ -188,7 +188,7 @@ export default function BrowsePage() {
                       <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
                     </svg>
                   </button>
-                </div>
+                </Link>
                 <div style={{padding: '12px'}}>
                   <div style={{fontSize: '11px', background: '#E6F1FB', color: '#185FA5', padding: '2px 8px', borderRadius: '4px', display: 'inline-block', marginBottom: '6px'}}>
                     {product.category}
@@ -204,8 +204,8 @@ export default function BrowsePage() {
                     <Link href="/compare" style={{flex: 1, padding: '6px', fontSize: '11px', border: '1px solid #ddd', borderRadius: '8px', background: '#fff', cursor: 'pointer', textAlign: 'center', textDecoration: 'none', color: '#1a1a1a'}}>
                       Compare
                     </Link>
-                    <Link href={`/product/${product.id}`} style={{flex: 1, padding: '6px', fontSize: '11px', border: 'none', borderRadius: '8px', background: '#378ADD', color: '#fff', cursor: 'pointer', textAlign: 'center', textDecoration: 'none'}}>
-                      View
+                    <Link href={`/product/${product.id}`} style={{flex: 1, padding: '6px', fontSize: '11px', border: 'none', borderRadius: '8px', background: '#3B6D11', color: '#fff', cursor: 'pointer', textAlign: 'center', textDecoration: 'none'}}>
+                      Buy
                     </Link>
                   </div>
                 </div>
