@@ -15,12 +15,16 @@ type Product = {
   price: number
 }
 
+type User = {
+  email?: string
+}
+
 export default function HomePage() {
   const [products, setProducts] = useState<Product[]>([])
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('All')
   const [loading, setLoading] = useState(true)
-  const [user, setUser] = useState<{ email: string } | null>(null)
+  const [user, setUser] = useState<User | null>(null)
 
   useEffect(() => {
     async function loadProducts() {
@@ -31,11 +35,12 @@ export default function HomePage() {
     loadProducts()
 
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
+      if (session?.user) setUser(session.user)
     })
 
     supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
+      if (session?.user) setUser(session.user)
+      else setUser(null)
     })
   }, [])
 
