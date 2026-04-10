@@ -1,16 +1,6 @@
 import { MetadataRoute } from 'next'
-import { supabase } from '../lib/supabase'
 
-export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const { data: products } = await supabase.from('products').select('id, created_at')
-
-  const productUrls = (products || []).map(p => ({
-    url: `https://getsmartreviews.in/product/${p.id}`,
-    lastModified: new Date(p.created_at),
-    changeFrequency: 'weekly' as const,
-    priority: 0.8,
-  }))
-
+export default function sitemap(): MetadataRoute.Sitemap {
   return [
     {
       url: 'https://getsmartreviews.in',
@@ -36,6 +26,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: 'monthly',
       priority: 0.5,
     },
-    ...productUrls,
   ]
 }
