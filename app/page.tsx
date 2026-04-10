@@ -20,6 +20,7 @@ export default function HomePage() {
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('All')
   const [loading, setLoading] = useState(true)
+  const [user, setUser] = useState<{ email: string } | null>(null)
 
   useEffect(() => {
     async function loadProducts() {
@@ -28,6 +29,14 @@ export default function HomePage() {
       setLoading(false)
     }
     loadProducts()
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null)
+    })
+
+    supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null)
+    })
   }, [])
 
   const filtered = products
@@ -46,9 +55,21 @@ export default function HomePage() {
           <Link href="/compare" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Compare</Link>
           <Link href="/submit-review" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Submit review</Link>
         </div>
-        <button style={{ padding: '8px 18px', background: '#378ADD', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '14px', cursor: 'pointer' }}>
-          Sign in
-        </button>
+        {user ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '13px', color: '#666' }}>👋 {user.email}</span>
+            <button
+              onClick={async () => { await supabase.auth.signOut(); setUser(null) }}
+              style={{ padding: '8px 18px', background: '#fff', color: '#378ADD', border: '1px solid #378ADD', borderRadius: '8px', fontSize: '14px', cursor: 'pointer' }}
+            >
+              Sign out
+            </button>
+          </div>
+        ) : (
+          <Link href="/login" style={{ padding: '8px 18px', background: '#378ADD', color: '#fff', borderRadius: '8px', fontSize: '14px', cursor: 'pointer', textDecoration: 'none' }}>
+            Sign in
+          </Link>
+        )}
       </nav>
 
       <div style={{ background: '#E6F1FB', borderBottom: '1px solid #B5D4F4', padding: '10px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
