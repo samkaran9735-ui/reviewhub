@@ -23,6 +23,15 @@ export default function BrowsePage() {
   const [category, setCategory] = useState('All')
   const [sort, setSort] = useState('score')
   const [maxPrice, setMaxPrice] = useState(200000)
+  const [wishlist, setWishlist] = useState<Set<number>>(new Set())
+
+  const toggleWishlist = (id: number) => {
+    setWishlist(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
 
   const categories = ['All', 'Tech', 'Beauty', 'Fashion', 'Home', 'Sports']
 
@@ -140,8 +149,17 @@ export default function BrowsePage() {
           <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '14px'}}>
             {filtered.map(product => (
               <div key={product.id} style={{background: '#fff', border: '1px solid #eee', borderRadius: '12px', overflow: 'hidden'}}>
-                <div style={{background: '#f8f8f6', height: '110px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '44px'}}>
+                <div style={{background: '#f8f8f6', height: '110px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '44px', position: 'relative'}}>
                   {product.emoji}
+                  <button
+                    onClick={() => toggleWishlist(product.id)}
+                    style={{position: 'absolute', top: '8px', right: '8px', background: 'none', border: 'none', cursor: 'pointer', padding: '2px', lineHeight: 1}}
+                    title={wishlist.has(product.id) ? 'Remove from wishlist' : 'Add to wishlist'}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill={wishlist.has(product.id) ? '#e53935' : 'none'} stroke={wishlist.has(product.id) ? '#e53935' : '#999'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                    </svg>
+                  </button>
                 </div>
                 <div style={{padding: '12px'}}>
                   <div style={{fontSize: '11px', background: '#E6F1FB', color: '#185FA5', padding: '2px 8px', borderRadius: '4px', display: 'inline-block', marginBottom: '6px'}}>
