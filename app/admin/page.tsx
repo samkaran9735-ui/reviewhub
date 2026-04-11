@@ -36,7 +36,7 @@ export default function AdminPage() {
   const router = useRouter()
   const [authorized, setAuthorized] = useState(false)
   const [checking, setChecking] = useState(true)
-  const [tab, setTab] = useState<'products' | 'reviews' | 'add'>('products')
+  const [tab, setTab] = useState<'products' | 'reviews' | 'add' | 'import'>('products')
   const [products, setProducts] = useState<Product[]>([])
   const [reviews, setReviews] = useState<Review[]>([])
   const [loading, setLoading] = useState(true)
@@ -44,6 +44,17 @@ export default function AdminPage() {
   const [message, setMessage] = useState('')
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [adminEmail, setAdminEmail] = useState('')
+
+  // Import from URL state
+  const [importUrl, setImportUrl] = useState('')
+  const [importing, setImporting] = useState(false)
+  const [importError, setImportError] = useState('')
+  const [importedProduct, setImportedProduct] = useState<null | {
+    name: string; brand: string; category: string; price: number;
+    description: string; score: number; reviews_count: number; emoji: string
+  }>(null)
+  const [importSaving, setImportSaving] = useState(false)
+  const [importMessage, setImportMessage] = useState('')
 
   const [form, setForm] = useState({
     name: '', brand: '', category: 'Tech', emoji: '🎧',
@@ -75,6 +86,57 @@ export default function AdminPage() {
     const { data: revs } = await supabase.from('reviews').select('*, products(name)').order('created_at', { ascending: false })
     if (revs) setReviews(revs as Review[])
     setLoading(false)
+  }
+
+  async function fetchFromUrl() {
+    if (!importUrl.trim()) return
+    setImporting(true)
+    setImportError('')
+    setImportedProduct(null)
+    setImportMessage('')
+    try {
+      const res = await fetch('/api/import-product', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: importUrl.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        setImportError(data.error || 'Failed to import product.')
+      } else {
+        setImportedProduct({ ...data.product, emoji: emojis[0] })
+      }
+    } catch {
+      setImportError('Something went wrong. Please try again.')
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  async function saveImportedProduct() {
+    if (!importedProduct) return
+    setImportSaving(true)
+    setImportMessage('')
+    const { error } = await supabase.from('products').insert({
+      name: importedProduct.name,
+      brand: importedProduct.brand,
+      category: importedProduct.category,
+      emoji: importedProduct.emoji,
+      description: importedProduct.description,
+      score: importedProduct.score,
+      price: importedProduct.price,
+      reviews_count: importedProduct.reviews_count,
+    })
+    if (error) {
+      setImportMessage('Error: ' + error.message)
+    } else {
+      setImportMessage('Product saved successfully!')
+      setImportedProduct(null)
+      setImportUrl('')
+      loadData()
+      setTimeout(() => setTab('products'), 1500)
+    }
+    setImportSaving(false)
   }
 
   async function addProduct() {
@@ -169,7 +231,8 @@ export default function AdminPage() {
           {[
             { key: 'products', label: '📦 Products', count: products.length },
             { key: 'reviews', label: '⭐ Reviews', count: pendingReviews.length },
-            { key: 'add', label: '➕ Add product', count: null },
+            { key: 'import', label: '🔗 Import from URL', count: null },
+            { key: 'add', label: '➕ Add manually', count: null },
           ].map(item => (
             <div key={item.key} onClick={() => setTab(item.key as typeof tab)}
               style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 20px', cursor: 'pointer', background: tab === item.key ? '#E6F1FB' : 'transparent', borderRight: tab === item.key ? '3px solid #378ADD' : 'none', color: tab === item.key ? '#185FA5' : '#666', fontSize: '14px', fontWeight: tab === item.key ? '500' : '400' }}>
@@ -297,6 +360,122 @@ export default function AdminPage() {
                       {approvedReviews.length === 0 && <div style={{ color: '#666', fontSize: '14px' }}>No approved reviews yet.</div>}
                     </div>
                   </div>
+                </div>
+              )}
+
+              {tab === 'import' && (
+                <div style={{ maxWidth: '660px' }}>
+                  <h1 style={{ fontSize: '20px', fontWeight: '500', color: '#1a1a1a', marginBottom: '6px' }}>Import product from URL</h1>
+                  <p style={{ fontSize: '13px', color: '#666', marginBottom: '24px' }}>Paste any product page link — Amazon, Flipkart, brand website, etc. AI will extract all details automatically.</p>
+
+                  {/* URL input */}
+                  <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: '14px', padding: '20px', marginBottom: '20px' }}>
+                    <div style={{ fontSize: '13px', fontWeight: '500', color: '#1a1a1a', marginBottom: '8px' }}>Product page URL</div>
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                      <input
+                        value={importUrl}
+                        onChange={e => { setImportUrl(e.target.value); setImportError(''); setImportedProduct(null); setImportMessage('') }}
+                        onKeyDown={e => e.key === 'Enter' && fetchFromUrl()}
+                        placeholder="https://www.amazon.in/dp/... or any product page"
+                        style={{ flex: 1, padding: '10px 14px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '13px', outline: 'none' }}
+                      />
+                      <button
+                        onClick={fetchFromUrl}
+                        disabled={importing || !importUrl.trim()}
+                        style={{ padding: '10px 20px', background: importing || !importUrl.trim() ? '#aaa' : '#378ADD', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '13px', cursor: importing || !importUrl.trim() ? 'not-allowed' : 'pointer', fontWeight: '500', whiteSpace: 'nowrap' }}
+                      >
+                        {importing ? '⏳ Fetching...' : '🔍 Fetch'}
+                      </button>
+                    </div>
+                    {importing && (
+                      <div style={{ marginTop: '12px', fontSize: '13px', color: '#378ADD', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span>Fetching page and extracting product details with AI...</span>
+                      </div>
+                    )}
+                    {importError && (
+                      <div style={{ marginTop: '10px', background: '#FCEBEB', color: '#A32D2D', padding: '10px 14px', borderRadius: '8px', fontSize: '13px' }}>
+                        {importError}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Preview & edit */}
+                  {importedProduct && (
+                    <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: '14px', padding: '24px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '18px' }}>
+                        <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#3B6D11' }} />
+                        <div style={{ fontSize: '14px', fontWeight: '500', color: '#3B6D11' }}>Product details extracted — review and save</div>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
+                        <div>
+                          <div style={{ fontSize: '12px', fontWeight: '500', color: '#666', marginBottom: '5px' }}>Product name</div>
+                          <input value={importedProduct.name} onChange={e => setImportedProduct(p => p && ({ ...p, name: e.target.value }))}
+                            style={{ width: '100%', padding: '9px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '13px', outline: 'none' }} />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '12px', fontWeight: '500', color: '#666', marginBottom: '5px' }}>Brand</div>
+                          <input value={importedProduct.brand} onChange={e => setImportedProduct(p => p && ({ ...p, brand: e.target.value }))}
+                            style={{ width: '100%', padding: '9px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '13px', outline: 'none' }} />
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '14px', marginBottom: '14px' }}>
+                        <div>
+                          <div style={{ fontSize: '12px', fontWeight: '500', color: '#666', marginBottom: '5px' }}>Category</div>
+                          <select value={importedProduct.category} onChange={e => setImportedProduct(p => p && ({ ...p, category: e.target.value }))}
+                            style={{ width: '100%', padding: '9px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '13px', outline: 'none', background: '#fff' }}>
+                            {categories.map(c => <option key={c}>{c}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '12px', fontWeight: '500', color: '#666', marginBottom: '5px' }}>Price (₹)</div>
+                          <input type="number" value={importedProduct.price} onChange={e => setImportedProduct(p => p && ({ ...p, price: Number(e.target.value) }))}
+                            style={{ width: '100%', padding: '9px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '13px', outline: 'none' }} />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '12px', fontWeight: '500', color: '#666', marginBottom: '5px' }}>Score / 10</div>
+                          <input type="number" min="0" max="10" step="0.1" value={importedProduct.score} onChange={e => setImportedProduct(p => p && ({ ...p, score: Number(e.target.value) }))}
+                            style={{ width: '100%', padding: '9px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '13px', outline: 'none' }} />
+                        </div>
+                      </div>
+
+                      <div style={{ marginBottom: '14px' }}>
+                        <div style={{ fontSize: '12px', fontWeight: '500', color: '#666', marginBottom: '5px' }}>Description</div>
+                        <textarea value={importedProduct.description} onChange={e => setImportedProduct(p => p && ({ ...p, description: e.target.value }))}
+                          style={{ width: '100%', padding: '9px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '13px', outline: 'none', minHeight: '70px', resize: 'vertical', fontFamily: 'inherit' }} />
+                      </div>
+
+                      <div style={{ marginBottom: '18px' }}>
+                        <div style={{ fontSize: '12px', fontWeight: '500', color: '#666', marginBottom: '8px' }}>Emoji icon</div>
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                          {emojis.map(e => (
+                            <div key={e} onClick={() => setImportedProduct(p => p && ({ ...p, emoji: e }))}
+                              style={{ width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', border: `2px solid ${importedProduct.emoji === e ? '#378ADD' : '#eee'}`, borderRadius: '8px', cursor: 'pointer', background: importedProduct.emoji === e ? '#E6F1FB' : '#fff' }}>
+                              {e}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {importMessage && (
+                        <div style={{ background: importMessage.includes('Error') ? '#FCEBEB' : '#EAF3DE', color: importMessage.includes('Error') ? '#A32D2D' : '#3B6D11', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', marginBottom: '14px' }}>
+                          {importMessage}
+                        </div>
+                      )}
+
+                      <div style={{ display: 'flex', gap: '10px' }}>
+                        <button onClick={() => { setImportedProduct(null); setImportUrl('') }}
+                          style={{ padding: '10px 20px', border: '1px solid #ddd', borderRadius: '8px', background: '#fff', fontSize: '13px', cursor: 'pointer' }}>
+                          Clear
+                        </button>
+                        <button onClick={saveImportedProduct} disabled={importSaving}
+                          style={{ flex: 1, padding: '10px', background: importSaving ? '#aaa' : '#3B6D11', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '14px', cursor: importSaving ? 'not-allowed' : 'pointer', fontWeight: '500' }}>
+                          {importSaving ? 'Saving...' : '✓ Save product to database'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
