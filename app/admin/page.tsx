@@ -201,14 +201,24 @@ export default function AdminPage() {
       price: amazonProduct.price,
       reviews_count: amazonProduct.reviews_count,
     }
-    let { error } = await supabase.from('products').insert({ ...base, ...(amazonSelectedImage ? { image_url: amazonSelectedImage } : {}) })
+    let { error, data: inserted } = await supabase.from('products').insert({ ...base, ...(amazonSelectedImage ? { image_url: amazonSelectedImage } : {}) }).select('id').single()
     if (error?.message?.includes('image_url')) {
-      // Column doesn't exist yet — save without it
-      ;({ error } = await supabase.from('products').insert(base))
+      ;({ error, data: inserted } = await supabase.from('products').insert(base).select('id').single())
     }
     if (error) {
       setAmazonMessage('Error: ' + error.message)
     } else {
+      // Auto-save the Amazon URL as a buy link
+      if (inserted?.id && amazonUrl.trim()) {
+        await supabase.from('store_prices').insert({
+          product_id: inserted.id,
+          store: 'Amazon',
+          price: amazonProduct.price || 0,
+          affiliate_url: amazonUrl.trim(),
+          tag: 'Buy on Amazon',
+          color: '#FF9900',
+        })
+      }
       setAmazonMessage('Product saved successfully!')
       setAmazonProduct(null)
       setAmazonUrl('')
