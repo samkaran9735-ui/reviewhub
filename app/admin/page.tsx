@@ -37,7 +37,7 @@ export default function AdminPage() {
   const router = useRouter()
   const [authorized, setAuthorized] = useState(false)
   const [checking, setChecking] = useState(true)
-  const [tab, setTab] = useState<'products' | 'reviews' | 'add' | 'import' | 'amazon'>('products')
+  const [tab, setTab] = useState<'products' | 'reviews' | 'add' | 'import' | 'amazon' | 'buylinks'>('products')
   const [products, setProducts] = useState<Product[]>([])
   const [reviews, setReviews] = useState<Review[]>([])
   const [loading, setLoading] = useState(true)
@@ -73,6 +73,16 @@ export default function AdminPage() {
   }>(null)
   const [importSaving, setImportSaving] = useState(false)
   const [importMessage, setImportMessage] = useState('')
+
+  // Buy links state
+  const [buyLinksProduct, setBuyLinksProduct] = useState<string | null>(null) // selected product id
+  const [buyLinksData, setBuyLinksData] = useState<Record<string, { price: string; url: string }>>({
+    Amazon: { price: '', url: '' },
+    Flipkart: { price: '', url: '' },
+    Meesho: { price: '', url: '' },
+  })
+  const [buyLinksSaving, setBuyLinksSaving] = useState(false)
+  const [buyLinksMessage, setBuyLinksMessage] = useState('')
 
   const [form, setForm] = useState({
     name: '', brand: '', category: 'Tech', emoji: '🎧',
@@ -298,6 +308,54 @@ export default function AdminPage() {
     setSaving(false)
   }
 
+  async function loadBuyLinks(productId: string) {
+    setBuyLinksMessage('')
+    const { data } = await supabase.from('store_prices').select('*').eq('product_id', productId)
+    const fresh: Record<string, { price: string; url: string }> = {
+      Amazon: { price: '', url: '' },
+      Flipkart: { price: '', url: '' },
+      Meesho: { price: '', url: '' },
+    }
+    if (data) {
+      data.forEach((row: { store: string; price: number; affiliate_url: string }) => {
+        if (fresh[row.store] !== undefined) {
+          fresh[row.store] = { price: row.price ? String(row.price) : '', url: row.affiliate_url || '' }
+        }
+      })
+    }
+    setBuyLinksData(fresh)
+  }
+
+  async function saveBuyLinks() {
+    if (!buyLinksProduct) return
+    setBuyLinksSaving(true)
+    setBuyLinksMessage('')
+    const storeConfig: Record<string, { tag: string; color: string }> = {
+      Amazon: { tag: 'Prime fast', color: '#FF9900' },
+      Flipkart: { tag: 'Best price', color: '#FF9F00' },
+      Meesho: { tag: 'Coupon available', color: '#F43397' },
+    }
+    // Delete existing rows for this product first
+    await supabase.from('store_prices').delete().eq('product_id', buyLinksProduct)
+    // Insert only stores that have a URL filled in
+    const rows = Object.entries(buyLinksData)
+      .filter(([, v]) => v.url.trim())
+      .map(([store, v]) => ({
+        product_id: buyLinksProduct,
+        store,
+        price: v.price ? parseInt(v.price) : 0,
+        affiliate_url: v.url.trim(),
+        tag: storeConfig[store]?.tag || '',
+        color: storeConfig[store]?.color || '#378ADD',
+      }))
+    if (rows.length > 0) {
+      const { error } = await supabase.from('store_prices').insert(rows)
+      if (error) { setBuyLinksMessage('Error: ' + error.message); setBuyLinksSaving(false); return }
+    }
+    setBuyLinksMessage('Buy links saved!')
+    setBuyLinksSaving(false)
+  }
+
   async function deleteProduct(id: string) {
     await supabase.from('products').delete().eq('id', id)
     setDeleteConfirm(null)
@@ -361,8 +419,9 @@ export default function AdminPage() {
           {[
             { key: 'products', label: '📦 Products', count: products.length },
             { key: 'reviews', label: '⭐ Reviews', count: pendingReviews.length },
+            { key: 'buylinks', label: '🔗 Buy Links', count: null },
             { key: 'amazon', label: '🛒 Import Amazon', count: null },
-            { key: 'import', label: '🔗 Import from URL', count: null },
+            { key: 'import', label: '📥 Import from URL', count: null },
             { key: 'add', label: '➕ Add manually', count: null },
           ].map(item => (
             <div key={item.key} onClick={() => setTab(item.key as typeof tab)}
@@ -493,6 +552,76 @@ export default function AdminPage() {
                       {approvedReviews.length === 0 && <div style={{ color: '#666', fontSize: '14px' }}>No approved reviews yet.</div>}
                     </div>
                   </div>
+                </div>
+              )}
+
+              {tab === 'buylinks' && (
+                <div style={{ maxWidth: '700px' }}>
+                  <h1 style={{ fontSize: '20px', fontWeight: '500', color: '#1a1a1a', marginBottom: '6px' }}>Buy Links</h1>
+                  <p style={{ fontSize: '13px', color: '#666', marginBottom: '24px' }}>Set store URLs for each product. These replace the default search links on the product page.</p>
+
+                  {/* Product selector */}
+                  <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: '14px', padding: '20px', marginBottom: '20px' }}>
+                    <div style={{ fontSize: '13px', fontWeight: '500', color: '#1a1a1a', marginBottom: '10px' }}>Select product</div>
+                    <select
+                      value={buyLinksProduct || ''}
+                      onChange={e => { setBuyLinksProduct(e.target.value); if (e.target.value) loadBuyLinks(e.target.value) }}
+                      style={{ width: '100%', padding: '10px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '13px', outline: 'none', background: '#fff' }}
+                    >
+                      <option value=''>— choose a product —</option>
+                      {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                  </div>
+
+                  {buyLinksProduct && (
+                    <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: '14px', padding: '24px' }}>
+                      {(['Amazon', 'Flipkart', 'Meesho'] as const).map((store, i) => {
+                        const colors: Record<string, string> = { Amazon: '#FF9900', Flipkart: '#FF9F00', Meesho: '#F43397' }
+                        return (
+                          <div key={store} style={{ marginBottom: i < 2 ? '20px' : '0', paddingBottom: i < 2 ? '20px' : '0', borderBottom: i < 2 ? '1px solid #f0f0f0' : 'none' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+                              <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: colors[store], color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: '600' }}>{store[0]}</div>
+                              <div style={{ fontSize: '14px', fontWeight: '500', color: '#1a1a1a' }}>{store}</div>
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '10px' }}>
+                              <div>
+                                <div style={{ fontSize: '11px', fontWeight: '500', color: '#666', marginBottom: '5px' }}>Price (₹)</div>
+                                <input
+                                  type="number"
+                                  placeholder="e.g. 24990"
+                                  value={buyLinksData[store].price}
+                                  onChange={e => setBuyLinksData(d => ({ ...d, [store]: { ...d[store], price: e.target.value } }))}
+                                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '13px', outline: 'none' }}
+                                />
+                              </div>
+                              <div>
+                                <div style={{ fontSize: '11px', fontWeight: '500', color: '#666', marginBottom: '5px' }}>Product URL on {store}</div>
+                                <input
+                                  placeholder={`https://www.${store.toLowerCase()}.${store === 'Amazon' ? 'in/dp/...' : store === 'Flipkart' ? 'com/...' : 'com/...'}`}
+                                  value={buyLinksData[store].url}
+                                  onChange={e => setBuyLinksData(d => ({ ...d, [store]: { ...d[store], url: e.target.value } }))}
+                                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '13px', outline: 'none' }}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+
+                      {buyLinksMessage && (
+                        <div style={{ background: buyLinksMessage.includes('Error') ? '#FCEBEB' : '#EAF3DE', color: buyLinksMessage.includes('Error') ? '#A32D2D' : '#3B6D11', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', margin: '16px 0 0' }}>
+                          {buyLinksMessage}
+                        </div>
+                      )}
+
+                      <button
+                        onClick={saveBuyLinks}
+                        disabled={buyLinksSaving}
+                        style={{ marginTop: '20px', width: '100%', padding: '11px', background: buyLinksSaving ? '#aaa' : '#3B6D11', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '500', cursor: buyLinksSaving ? 'not-allowed' : 'pointer' }}>
+                        {buyLinksSaving ? 'Saving...' : '✓ Save buy links'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 
