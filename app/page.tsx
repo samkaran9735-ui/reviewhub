@@ -186,7 +186,7 @@ export default function HomePage() {
               <div key={product.id} style={{ background: '#fff', border: '1px solid #eee', borderRadius: '12px', overflow: 'hidden' }}>
                 <Link href={`/product/${product.id}`} style={{ background: '#f8f8f6', height: '140px', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', textDecoration: 'none', cursor: 'pointer', overflow: 'hidden' }}>
                   {product.image_url
-                    ? <img src={product.image_url} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '10px' }} />
+                    ? <img src={product.image_url} alt={product.name} style={{ display: 'block', width: '100%', height: '130px', objectFit: 'contain', padding: '10px' }} />
                     : <span style={{ fontSize: '44px' }}>{product.emoji}</span>}
                   <button
                     onClick={(e) => { e.preventDefault(); toggleWishlist(product.id) }}

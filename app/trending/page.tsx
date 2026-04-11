@@ -82,7 +82,7 @@ export default function TrendingPage() {
                 </div>
                 <Link href={`/product/${product.id}`} style={{ background: '#f8f8f6', height: '150px', display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', cursor: 'pointer', overflow: 'hidden' }}>
                   {product.image_url
-                    ? <img src={product.image_url} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '10px' }} />
+                    ? <img src={product.image_url} alt={product.name} style={{ display: 'block', width: '100%', height: '140px', objectFit: 'contain', padding: '10px' }} />
                     : <span style={{ fontSize: '52px' }}>{product.emoji}</span>}
                 </Link>
                 <div style={{ padding: '14px' }}>
