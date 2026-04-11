@@ -239,37 +239,29 @@ function guessCategory(text: string): string {
   return 'Tech'
 }
 
-async function fetchWithProxy(url: string): Promise<string> {
-  // Try mobile Amazon URL too — easier to scrape
+function isCaptcha(html: string): boolean {
+  // Only match real CAPTCHA pages, not product pages that mention captcha in scripts
+  return html.includes('Type the characters you see') ||
+    html.includes('Enter the characters you see below') ||
+    html.includes('api.solvemedia.com') ||
+    html.includes('/errors/validateCaptcha') ||
+    (html.includes('captcha') && !html.includes('productTitle') && !html.includes('a-price') && html.length < 30000)
+}
+
+async function fetchWithProxy(url: string, asin: string): Promise<string> {
   const mobileUrl = url.replace('www.amazon.in', 'm.amazon.in').replace('www.amazon.com', 'm.amazon.com')
+  const reviewsUrl = asin ? `https://www.amazon.in/product-reviews/${asin}` : ''
 
   const strategies = [
-    // Strategy 1: Amazon mobile version (less protected)
-    async () => {
-      const res = await fetch(mobileUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'en-IN,en;q=0.9',
-          'Accept-Encoding': 'gzip, deflate, br',
-        },
-        signal: AbortSignal.timeout(15000),
-      })
-      if (!res.ok) throw new Error(`Mobile status ${res.status}`)
-      return res.text()
-    },
-    // Strategy 2: Direct fetch with Chrome desktop headers
+    // Strategy 1: Chrome with Google referer (appears as search traffic, less blocked)
     async () => {
       const res = await fetch(url, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
           'Accept-Language': 'en-IN,en;q=0.9,hi;q=0.8',
-          'Accept-Encoding': 'gzip, deflate, br',
+          'Referer': 'https://www.google.com/',
           'Cache-Control': 'max-age=0',
-          'Sec-Fetch-Dest': 'document',
-          'Sec-Fetch-Mode': 'navigate',
-          'Sec-Fetch-Site': 'none',
           'Upgrade-Insecure-Requests': '1',
         },
         signal: AbortSignal.timeout(15000),
@@ -277,29 +269,57 @@ async function fetchWithProxy(url: string): Promise<string> {
       if (!res.ok) throw new Error(`Status ${res.status}`)
       return res.text()
     },
-    // Strategy 3: via allorigins raw proxy
+    // Strategy 2: Mobile Amazon (separate bot detection stack, often less strict)
+    async () => {
+      const res = await fetch(mobileUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-IN,en;q=0.9',
+          'Referer': 'https://www.google.com/',
+        },
+        signal: AbortSignal.timeout(15000),
+      })
+      if (!res.ok) throw new Error(`Mobile status ${res.status}`)
+      return res.text()
+    },
+    // Strategy 3: Product reviews page — frequently accessed by users, minimal bot protection
+    ...(reviewsUrl ? [async () => {
+      const res = await fetch(reviewsUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Referer': 'https://www.google.com/',
+        },
+        signal: AbortSignal.timeout(15000),
+      })
+      if (!res.ok) throw new Error(`Reviews page status ${res.status}`)
+      return res.text()
+    }] : []),
+    // Strategy 4: Twitterbot UA (social crawlers are often whitelisted for link previews)
+    async () => {
+      const res = await fetch(url, {
+        headers: { 'User-Agent': 'Twitterbot/1.0' },
+        signal: AbortSignal.timeout(10000),
+      })
+      if (!res.ok) throw new Error(`Twitterbot status ${res.status}`)
+      return res.text()
+    },
+    // Strategy 5: allorigins raw
     async () => {
       const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
       const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(20000) })
-      if (!res.ok) throw new Error(`Allorigins-raw status ${res.status}`)
+      if (!res.ok) throw new Error(`Allorigins status ${res.status}`)
       return res.text()
     },
-    // Strategy 4: via allorigins json proxy
-    async () => {
-      const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`
-      const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(20000) })
-      if (!res.ok) throw new Error(`Allorigins status ${res.status}`)
-      const data = await res.json()
-      return data.contents || ''
-    },
-    // Strategy 5: via codetabs proxy
+    // Strategy 6: codetabs
     async () => {
       const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
       const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(20000) })
       if (!res.ok) throw new Error(`Codetabs status ${res.status}`)
       return res.text()
     },
-    // Strategy 6: via corsproxy with Googlebot UA
+    // Strategy 7: corsproxy
     async () => {
       const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`
       const res = await fetch(proxyUrl, {
@@ -315,18 +335,12 @@ async function fetchWithProxy(url: string): Promise<string> {
   for (const strategy of strategies) {
     try {
       const html = await strategy()
-      if (html && html.length > 500) return html
+      if (html && html.length > 500 && !isCaptcha(html)) return html
     } catch (e) {
       lastError = e instanceof Error ? e.message : 'failed'
     }
   }
   throw new Error(`All fetch strategies failed. Last error: ${lastError}`)
-}
-
-function isCaptcha(html: string): boolean {
-  return html.includes('Type the characters') ||
-    html.includes('Enter the characters you see below') ||
-    (html.includes('captcha') && html.length < 50000)
 }
 
 export async function POST(request: NextRequest) {
@@ -348,23 +362,16 @@ export async function POST(request: NextRequest) {
 
     let html: string
 
-    // Use HTML pre-fetched by the browser if provided (avoids server-side IP blocks)
+    // Use HTML pre-fetched by the browser if provided and it's not a CAPTCHA page
     if (clientHtml && clientHtml.length > 1000 && !isCaptcha(clientHtml)) {
       html = clientHtml
     } else {
       try {
-        html = await fetchWithProxy(cleanUrl)
+        // fetchWithProxy already skips CAPTCHA responses internally
+        html = await fetchWithProxy(cleanUrl, asin)
       } catch (e: unknown) {
         return Response.json({
           error: 'Amazon is blocking automated access. Please fill in the details manually below.',
-          asin,
-          partial: { name: '', brand: '', asin }
-        }, { status: 422 })
-      }
-
-      if (isCaptcha(html)) {
-        return Response.json({
-          error: 'Amazon returned a CAPTCHA. Please fill in details manually.',
           asin,
           partial: { name: '', brand: '', asin }
         }, { status: 422 })
