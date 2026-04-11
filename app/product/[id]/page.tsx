@@ -37,10 +37,22 @@ type StorePrice = {
 }
 
 const fallbackStores = [
-  { store: 'Flipkart', price: 0, tag: 'Best price', color: '#FF9F00', affiliate_url: '#' },
-  { store: 'Amazon', price: 0, tag: 'Prime fast', color: '#FF9900', affiliate_url: '#' },
-  { store: 'Meesho', price: 0, tag: 'Coupon available', color: '#F43397', affiliate_url: '#' },
+  { store: 'Flipkart', price: 0, tag: 'Best price', color: '#FF9F00', affiliate_url: '' },
+  { store: 'Amazon', price: 0, tag: 'Prime fast', color: '#FF9900', affiliate_url: '' },
+  { store: 'Meesho', price: 0, tag: 'Coupon available', color: '#F43397', affiliate_url: '' },
 ]
+
+function getBuyUrl(storeName: string, productName: string, storedUrl: string): string {
+  if (storedUrl && storedUrl !== '#') return storedUrl
+  const q = encodeURIComponent(productName)
+  const s = storeName.toLowerCase()
+  if (s === 'amazon') return `https://www.amazon.in/s?k=${q}`
+  if (s === 'flipkart') return `https://www.flipkart.com/search?q=${q}`
+  if (s === 'meesho') return `https://www.meesho.com/search?q=${q}`
+  if (s === 'croma') return `https://www.croma.com/searchB?q=${q}`
+  if (s === 'reliance digital') return `https://www.reliancedigital.in/search?q=${q}`
+  return `https://www.google.com/search?q=${encodeURIComponent(productName)}+buy+online+india`
+}
 
 export default function ProductPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -134,7 +146,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
               <button
                 onClick={() => setShowBuyModal(true)}
                 style={{ flex: 2, padding: '13px', background: '#378ADD', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '15px', fontWeight: '500', cursor: 'pointer' }}>
-                Buy now — from ₹{product.price.toLocaleString('en-IN')}
+                🛒 Buy now — from ₹{product.price.toLocaleString('en-IN')}
               </button>
               <Link href="/compare" style={{ flex: 1, padding: '13px', background: '#fff', color: '#1a1a1a', border: '1px solid #ddd', borderRadius: '10px', fontSize: '14px', textAlign: 'center', textDecoration: 'none' }}>
                 Compare
@@ -166,9 +178,13 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                       {store.price > 0 && <div style={{ fontSize: '16px', fontWeight: '500' }}>₹{store.price.toLocaleString('en-IN')}</div>}
-                      <button style={{ padding: '7px 16px', background: i === 0 ? '#378ADD' : '#fff', color: i === 0 ? '#fff' : '#378ADD', border: '1px solid #378ADD', borderRadius: '8px', fontSize: '13px', cursor: 'pointer' }}>
+                      <a
+                        href={getBuyUrl(store.store, product.name, store.affiliate_url)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ padding: '7px 16px', background: i === 0 ? '#378ADD' : '#fff', color: i === 0 ? '#fff' : '#378ADD', border: '1px solid #378ADD', borderRadius: '8px', fontSize: '13px', cursor: 'pointer', textDecoration: 'none', display: 'inline-block' }}>
                         Buy now
-                      </button>
+                      </a>
                     </div>
                   </div>
                 ))}
