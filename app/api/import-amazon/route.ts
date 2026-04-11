@@ -226,8 +226,25 @@ function guessCategory(text: string): string {
 }
 
 async function fetchWithProxy(url: string): Promise<string> {
+  // Try mobile Amazon URL too — easier to scrape
+  const mobileUrl = url.replace('www.amazon.in', 'm.amazon.in').replace('www.amazon.com', 'm.amazon.com')
+
   const strategies = [
-    // Strategy 1: Direct fetch with browser-like headers
+    // Strategy 1: Amazon mobile version (less protected)
+    async () => {
+      const res = await fetch(mobileUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-IN,en;q=0.9',
+          'Accept-Encoding': 'gzip, deflate, br',
+        },
+        signal: AbortSignal.timeout(15000),
+      })
+      if (!res.ok) throw new Error(`Mobile status ${res.status}`)
+      return res.text()
+    },
+    // Strategy 2: Direct fetch with Chrome desktop headers
     async () => {
       const res = await fetch(url, {
         headers: {
@@ -246,22 +263,36 @@ async function fetchWithProxy(url: string): Promise<string> {
       if (!res.ok) throw new Error(`Status ${res.status}`)
       return res.text()
     },
-    // Strategy 2: via allorigins proxy
+    // Strategy 3: via allorigins raw proxy
+    async () => {
+      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
+      const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(20000) })
+      if (!res.ok) throw new Error(`Allorigins-raw status ${res.status}`)
+      return res.text()
+    },
+    // Strategy 4: via allorigins json proxy
     async () => {
       const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`
-      const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(15000) })
-      if (!res.ok) throw new Error(`Proxy status ${res.status}`)
+      const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(20000) })
+      if (!res.ok) throw new Error(`Allorigins status ${res.status}`)
       const data = await res.json()
       return data.contents || ''
     },
-    // Strategy 3: via corsproxy
+    // Strategy 5: via codetabs proxy
+    async () => {
+      const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
+      const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(20000) })
+      if (!res.ok) throw new Error(`Codetabs status ${res.status}`)
+      return res.text()
+    },
+    // Strategy 6: via corsproxy with Googlebot UA
     async () => {
       const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`
       const res = await fetch(proxyUrl, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)' },
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)' },
         signal: AbortSignal.timeout(15000),
       })
-      if (!res.ok) throw new Error(`Proxy2 status ${res.status}`)
+      if (!res.ok) throw new Error(`Corsproxy status ${res.status}`)
       return res.text()
     },
   ]
@@ -270,7 +301,7 @@ async function fetchWithProxy(url: string): Promise<string> {
   for (const strategy of strategies) {
     try {
       const html = await strategy()
-      if (html && html.length > 1000) return html
+      if (html && html.length > 500) return html
     } catch (e) {
       lastError = e instanceof Error ? e.message : 'failed'
     }
@@ -308,7 +339,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if Amazon returned a CAPTCHA/robot check page
-    if (html.includes('robot') || html.includes('captcha') || html.includes('Type the characters')) {
+    if (html.includes('Type the characters') || html.includes('Enter the characters you see below') || (html.includes('captcha') && html.length < 50000)) {
       return Response.json({
         error: 'Amazon returned a CAPTCHA. Please fill in details manually.',
         asin,
