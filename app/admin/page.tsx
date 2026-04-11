@@ -51,7 +51,9 @@ export default function AdminPage() {
   const [importError, setImportError] = useState('')
   const [importedProduct, setImportedProduct] = useState<null | {
     name: string; brand: string; category: string; price: number;
-    description: string; score: number; reviews_count: number; emoji: string
+    description: string; score: number; reviews_count: number; emoji: string;
+    image_url: string; specs: Record<string, string>;
+    reviews: Array<{ reviewer: string; rating: number; text: string }>
   }>(null)
   const [importSaving, setImportSaving] = useState(false)
   const [importMessage, setImportMessage] = useState('')
@@ -104,7 +106,7 @@ export default function AdminPage() {
       if (!res.ok || data.error) {
         setImportError(data.error || 'Failed to import product.')
       } else {
-        setImportedProduct({ ...data.product, emoji: emojis[0] })
+        setImportedProduct({ ...data.product, emoji: emojis[0], specs: data.product.specs || {}, reviews: data.product.reviews || [], image_url: data.product.image_url || '' })
       }
     } catch {
       setImportError('Something went wrong. Please try again.')
@@ -117,15 +119,21 @@ export default function AdminPage() {
     if (!importedProduct) return
     setImportSaving(true)
     setImportMessage('')
+    // Append specs to description
+    const specsText = Object.entries(importedProduct.specs).length > 0
+      ? '\n\nSpecifications:\n' + Object.entries(importedProduct.specs).map(([k, v]) => `${k}: ${v}`).join('\n')
+      : ''
+
     const { error } = await supabase.from('products').insert({
       name: importedProduct.name,
       brand: importedProduct.brand,
       category: importedProduct.category,
       emoji: importedProduct.emoji,
-      description: importedProduct.description,
+      description: importedProduct.description + specsText,
       score: importedProduct.score,
       price: importedProduct.price,
       reviews_count: importedProduct.reviews_count,
+      ...(importedProduct.image_url ? { image_url: importedProduct.image_url } : {}),
     })
     if (error) {
       setImportMessage('Error: ' + error.message)
@@ -440,11 +448,56 @@ export default function AdminPage() {
                         </div>
                       </div>
 
+                      {/* Product image */}
+                      {importedProduct.image_url && (
+                        <div style={{ marginBottom: '14px' }}>
+                          <div style={{ fontSize: '12px', fontWeight: '500', color: '#666', marginBottom: '5px' }}>Product image</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <img src={importedProduct.image_url} alt="product" style={{ width: '80px', height: '80px', objectFit: 'contain', border: '1px solid #eee', borderRadius: '8px', background: '#f8f8f6' }} />
+                            <input value={importedProduct.image_url} onChange={e => setImportedProduct(p => p && ({ ...p, image_url: e.target.value }))}
+                              style={{ flex: 1, padding: '9px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '12px', outline: 'none' }} />
+                          </div>
+                        </div>
+                      )}
+
                       <div style={{ marginBottom: '14px' }}>
                         <div style={{ fontSize: '12px', fontWeight: '500', color: '#666', marginBottom: '5px' }}>Description</div>
                         <textarea value={importedProduct.description} onChange={e => setImportedProduct(p => p && ({ ...p, description: e.target.value }))}
                           style={{ width: '100%', padding: '9px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '13px', outline: 'none', minHeight: '70px', resize: 'vertical', fontFamily: 'inherit' }} />
                       </div>
+
+                      {/* Specifications */}
+                      {Object.keys(importedProduct.specs).length > 0 && (
+                        <div style={{ marginBottom: '14px' }}>
+                          <div style={{ fontSize: '12px', fontWeight: '500', color: '#666', marginBottom: '8px' }}>Specifications ({Object.keys(importedProduct.specs).length} found)</div>
+                          <div style={{ background: '#f8f8f6', borderRadius: '8px', border: '1px solid #eee', overflow: 'hidden', maxHeight: '200px', overflowY: 'auto' }}>
+                            {Object.entries(importedProduct.specs).map(([key, val]) => (
+                              <div key={key} style={{ display: 'grid', gridTemplateColumns: '140px 1fr', borderBottom: '1px solid #eee', fontSize: '12px' }}>
+                                <div style={{ padding: '7px 10px', background: '#f0f0ee', color: '#555', fontWeight: '500' }}>{key}</div>
+                                <div style={{ padding: '7px 10px', color: '#1a1a1a' }}>{val}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Reviews */}
+                      {importedProduct.reviews.length > 0 && (
+                        <div style={{ marginBottom: '14px' }}>
+                          <div style={{ fontSize: '12px', fontWeight: '500', color: '#666', marginBottom: '8px' }}>Reviews found ({importedProduct.reviews.length})</div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            {importedProduct.reviews.map((r, i) => (
+                              <div key={i} style={{ background: '#f8f8f6', borderRadius: '8px', padding: '10px 12px', border: '1px solid #eee' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                  <span style={{ fontSize: '12px', fontWeight: '500', color: '#1a1a1a' }}>{r.reviewer}</span>
+                                  <span style={{ fontSize: '12px', color: '#BA7517' }}>★ {r.rating}/10</span>
+                                </div>
+                                <div style={{ fontSize: '12px', color: '#666', lineHeight: '1.4' }}>{r.text || 'No review text'}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                       <div style={{ marginBottom: '18px' }}>
                         <div style={{ fontSize: '12px', fontWeight: '500', color: '#666', marginBottom: '8px' }}>Emoji icon</div>
