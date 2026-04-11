@@ -180,7 +180,7 @@ export default function AdminPage() {
     const specsText = Object.entries(amazonProduct.specs).length > 0
       ? '\n\nSpecifications:\n' + Object.entries(amazonProduct.specs).map(([k, v]) => `${k}: ${v}`).join('\n')
       : ''
-    const { error } = await supabase.from('products').insert({
+    const base = {
       name: amazonProduct.name,
       brand: amazonProduct.brand,
       category: amazonProduct.category,
@@ -189,8 +189,12 @@ export default function AdminPage() {
       score: amazonProduct.score,
       price: amazonProduct.price,
       reviews_count: amazonProduct.reviews_count,
-      ...(amazonSelectedImage ? { image_url: amazonSelectedImage } : {}),
-    })
+    }
+    let { error } = await supabase.from('products').insert({ ...base, ...(amazonSelectedImage ? { image_url: amazonSelectedImage } : {}) })
+    if (error?.message?.includes('image_url')) {
+      // Column doesn't exist yet — save without it
+      ;({ error } = await supabase.from('products').insert(base))
+    }
     if (error) {
       setAmazonMessage('Error: ' + error.message)
     } else {
@@ -238,7 +242,7 @@ export default function AdminPage() {
       ? '\n\nSpecifications:\n' + Object.entries(importedProduct.specs).map(([k, v]) => `${k}: ${v}`).join('\n')
       : ''
 
-    const { error } = await supabase.from('products').insert({
+    const base = {
       name: importedProduct.name,
       brand: importedProduct.brand,
       category: importedProduct.category,
@@ -247,8 +251,11 @@ export default function AdminPage() {
       score: importedProduct.score,
       price: importedProduct.price,
       reviews_count: importedProduct.reviews_count,
-      ...(importedProduct.image_url ? { image_url: importedProduct.image_url } : {}),
-    })
+    }
+    let { error } = await supabase.from('products').insert({ ...base, ...(importedProduct.image_url ? { image_url: importedProduct.image_url } : {}) })
+    if (error?.message?.includes('image_url')) {
+      ;({ error } = await supabase.from('products').insert(base))
+    }
     if (error) {
       setImportMessage('Error: ' + error.message)
     } else {
