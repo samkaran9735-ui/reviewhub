@@ -97,6 +97,8 @@ export default function SubmitReviewPage() {
         </Link>
         <div style={{ display: 'flex', gap: '24px' }}>
           <Link href="/browse" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Browse</Link>
+          <Link href="/trending" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Trending</Link>
+          <Link href="/recommendations" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Recommendations</Link>
           <Link href="/compare" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Compare</Link>
           <Link href="/submit-review" style={{ fontSize: '14px', color: '#378ADD', textDecoration: 'none', fontWeight: '500' }}>Submit review</Link>
         </div>

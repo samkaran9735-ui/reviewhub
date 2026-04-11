@@ -95,6 +95,8 @@ export default function HomePage() {
         </Link>
         <div className="nav-links">
           <Link href="/browse" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Browse</Link>
+          <Link href="/trending" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Trending</Link>
+          <Link href="/recommendations" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Recommendations</Link>
           <Link href="/compare" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Compare</Link>
           <Link href="/submit-review" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Submit review</Link>
         </div>
@@ -121,6 +123,8 @@ export default function HomePage() {
       {menuOpen && (
         <div className="mobile-menu">
           <Link href="/browse" onClick={() => setMenuOpen(false)}>Browse</Link>
+          <Link href="/trending" onClick={() => setMenuOpen(false)}>Trending</Link>
+          <Link href="/recommendations" onClick={() => setMenuOpen(false)}>Recommendations</Link>
           <Link href="/compare" onClick={() => setMenuOpen(false)}>Compare</Link>
           <Link href="/submit-review" onClick={() => setMenuOpen(false)}>Submit review</Link>
           {user ? (
