@@ -36,7 +36,7 @@ export default function AdminPage() {
   const router = useRouter()
   const [authorized, setAuthorized] = useState(false)
   const [checking, setChecking] = useState(true)
-  const [tab, setTab] = useState<'products' | 'reviews' | 'add' | 'import'>('products')
+  const [tab, setTab] = useState<'products' | 'reviews' | 'add' | 'import' | 'amazon'>('products')
   const [products, setProducts] = useState<Product[]>([])
   const [reviews, setReviews] = useState<Review[]>([])
   const [loading, setLoading] = useState(true)
@@ -44,6 +44,21 @@ export default function AdminPage() {
   const [message, setMessage] = useState('')
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [adminEmail, setAdminEmail] = useState('')
+
+  // Amazon import state
+  const [amazonUrl, setAmazonUrl] = useState('')
+  const [amazonImporting, setAmazonImporting] = useState(false)
+  const [amazonError, setAmazonError] = useState('')
+  const [amazonProduct, setAmazonProduct] = useState<null | {
+    name: string; brand: string; category: string; price: number;
+    description: string; score: number; reviews_count: number; emoji: string;
+    image_url: string; images: string[]; specs: Record<string, string>;
+    reviews: Array<{ reviewer: string; rating: number; text: string }>;
+    asin: string; amazon_url: string;
+  }>(null)
+  const [amazonSaving, setAmazonSaving] = useState(false)
+  const [amazonMessage, setAmazonMessage] = useState('')
+  const [amazonSelectedImage, setAmazonSelectedImage] = useState('')
 
   // Import from URL state
   const [importUrl, setImportUrl] = useState('')
@@ -88,6 +103,87 @@ export default function AdminPage() {
     const { data: revs } = await supabase.from('reviews').select('*, products(name)').order('created_at', { ascending: false })
     if (revs) setReviews(revs as Review[])
     setLoading(false)
+  }
+
+  async function fetchFromAmazon() {
+    if (!amazonUrl.trim()) return
+    setAmazonImporting(true)
+    setAmazonError('')
+    setAmazonProduct(null)
+    setAmazonMessage('')
+    setAmazonSelectedImage('')
+    try {
+      const res = await fetch('/api/import-amazon', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: amazonUrl.trim() }),
+      })
+      const data = await res.json()
+      if (data.error && !data.partial) {
+        setAmazonError(data.error)
+      } else if (data.error && data.partial) {
+        setAmazonError(data.error)
+        // Still show partial data if available
+        if (data.partial?.asin) {
+          setAmazonProduct({
+            name: data.partial.name || '',
+            brand: data.partial.brand || 'Unknown',
+            category: 'Tech',
+            price: 0,
+            description: '',
+            score: 0,
+            reviews_count: 0,
+            emoji: emojis[0],
+            image_url: '',
+            images: [],
+            specs: {},
+            reviews: [],
+            asin: data.partial.asin || '',
+            amazon_url: amazonUrl.trim(),
+          })
+        }
+      } else {
+        const p = data.product
+        const imgs = p.images || (p.image_url ? [p.image_url] : [])
+        setAmazonProduct({ ...p, emoji: emojis[0], images: imgs, specs: p.specs || {}, reviews: p.reviews || [] })
+        setAmazonSelectedImage(imgs[0] || p.image_url || '')
+      }
+    } catch {
+      setAmazonError('Something went wrong. Please try again.')
+    } finally {
+      setAmazonImporting(false)
+    }
+  }
+
+  async function saveAmazonProduct() {
+    if (!amazonProduct) return
+    setAmazonSaving(true)
+    setAmazonMessage('')
+    const specsText = Object.entries(amazonProduct.specs).length > 0
+      ? '\n\nSpecifications:\n' + Object.entries(amazonProduct.specs).map(([k, v]) => `${k}: ${v}`).join('\n')
+      : ''
+    const { error } = await supabase.from('products').insert({
+      name: amazonProduct.name,
+      brand: amazonProduct.brand,
+      category: amazonProduct.category,
+      emoji: amazonProduct.emoji,
+      description: amazonProduct.description + specsText,
+      score: amazonProduct.score,
+      price: amazonProduct.price,
+      reviews_count: amazonProduct.reviews_count,
+      ...(amazonSelectedImage ? { image_url: amazonSelectedImage } : {}),
+    })
+    if (error) {
+      setAmazonMessage('Error: ' + error.message)
+    } else {
+      setAmazonMessage('Product saved successfully!')
+      setAmazonProduct(null)
+      setAmazonUrl('')
+      setAmazonSelectedImage('')
+      loadData()
+      setTimeout(() => setTab('products'), 1500)
+    }
+    setAmazonSaving(false)
   }
 
   async function fetchFromUrl() {
@@ -239,6 +335,7 @@ export default function AdminPage() {
           {[
             { key: 'products', label: '📦 Products', count: products.length },
             { key: 'reviews', label: '⭐ Reviews', count: pendingReviews.length },
+            { key: 'amazon', label: '🛒 Import Amazon', count: null },
             { key: 'import', label: '🔗 Import from URL', count: null },
             { key: 'add', label: '➕ Add manually', count: null },
           ].map(item => (
@@ -368,6 +465,173 @@ export default function AdminPage() {
                       {approvedReviews.length === 0 && <div style={{ color: '#666', fontSize: '14px' }}>No approved reviews yet.</div>}
                     </div>
                   </div>
+                </div>
+              )}
+
+              {tab === 'amazon' && (
+                <div style={{ maxWidth: '720px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                    <div style={{ background: '#FF9900', color: '#fff', borderRadius: '8px', padding: '4px 12px', fontSize: '13px', fontWeight: '600' }}>amazon</div>
+                    <h1 style={{ fontSize: '20px', fontWeight: '500', color: '#1a1a1a', margin: 0 }}>Import Amazon product</h1>
+                  </div>
+                  <p style={{ fontSize: '13px', color: '#666', marginBottom: '24px' }}>Paste any Amazon.in product URL — fetches name, price, images, specs and ratings automatically.</p>
+
+                  <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: '14px', padding: '20px', marginBottom: '20px' }}>
+                    <div style={{ fontSize: '13px', fontWeight: '500', color: '#1a1a1a', marginBottom: '8px' }}>Amazon product URL</div>
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                      <input
+                        value={amazonUrl}
+                        onChange={e => { setAmazonUrl(e.target.value); setAmazonError(''); setAmazonProduct(null); setAmazonMessage('') }}
+                        onKeyDown={e => e.key === 'Enter' && fetchFromAmazon()}
+                        placeholder="https://www.amazon.in/dp/B0XXXXXX or any amazon.in product URL"
+                        style={{ flex: 1, padding: '10px 14px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '13px', outline: 'none' }}
+                      />
+                      <button
+                        onClick={fetchFromAmazon}
+                        disabled={amazonImporting || !amazonUrl.trim()}
+                        style={{ padding: '10px 20px', background: amazonImporting || !amazonUrl.trim() ? '#aaa' : '#FF9900', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '13px', cursor: amazonImporting || !amazonUrl.trim() ? 'not-allowed' : 'pointer', fontWeight: '500', whiteSpace: 'nowrap' }}
+                      >
+                        {amazonImporting ? '⏳ Fetching...' : '🔍 Fetch'}
+                      </button>
+                    </div>
+                    {amazonImporting && (
+                      <div style={{ marginTop: '12px', fontSize: '13px', color: '#FF9900', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span>Fetching Amazon product details — this may take up to 20 seconds...</span>
+                      </div>
+                    )}
+                    {amazonError && (
+                      <div style={{ marginTop: '10px', background: '#FFF3E0', color: '#8B4513', padding: '10px 14px', borderRadius: '8px', fontSize: '13px' }}>
+                        ⚠️ {amazonError}
+                        {amazonProduct && <div style={{ marginTop: '4px', color: '#666' }}>Partial data loaded below — fill in missing fields manually.</div>}
+                      </div>
+                    )}
+                  </div>
+
+                  {amazonProduct && (
+                    <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: '14px', padding: '24px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '18px' }}>
+                        <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#FF9900' }} />
+                        <div style={{ fontSize: '14px', fontWeight: '500', color: '#8B5E00' }}>
+                          {amazonProduct.asin ? `ASIN: ${amazonProduct.asin} — ` : ''}Review and save product
+                        </div>
+                      </div>
+
+                      {/* Image gallery */}
+                      {amazonProduct.images.length > 0 && (
+                        <div style={{ marginBottom: '18px' }}>
+                          <div style={{ fontSize: '12px', fontWeight: '500', color: '#666', marginBottom: '8px' }}>Product images ({amazonProduct.images.length} found) — click to select main image</div>
+                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                            {amazonProduct.images.map((img, i) => (
+                              <div key={i} onClick={() => setAmazonSelectedImage(img)}
+                                style={{ width: '80px', height: '80px', border: `2px solid ${amazonSelectedImage === img ? '#FF9900' : '#eee'}`, borderRadius: '8px', overflow: 'hidden', cursor: 'pointer', background: '#f8f8f6', flexShrink: 0 }}>
+                                <img src={img} alt={`product ${i + 1}`} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                              </div>
+                            ))}
+                          </div>
+                          {amazonSelectedImage && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              <img src={amazonSelectedImage} alt="selected" style={{ width: '120px', height: '120px', objectFit: 'contain', border: '1px solid #eee', borderRadius: '10px', background: '#f8f8f6' }} />
+                              <div style={{ flex: 1 }}>
+                                <div style={{ fontSize: '11px', color: '#999', marginBottom: '4px' }}>Selected main image URL</div>
+                                <input value={amazonSelectedImage} onChange={e => setAmazonSelectedImage(e.target.value)}
+                                  style={{ width: '100%', padding: '8px 10px', border: '1px solid #ddd', borderRadius: '7px', fontSize: '11px', outline: 'none' }} />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
+                        <div>
+                          <div style={{ fontSize: '12px', fontWeight: '500', color: '#666', marginBottom: '5px' }}>Product name</div>
+                          <input value={amazonProduct.name} onChange={e => setAmazonProduct(p => p && ({ ...p, name: e.target.value }))}
+                            style={{ width: '100%', padding: '9px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '13px', outline: 'none' }} />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '12px', fontWeight: '500', color: '#666', marginBottom: '5px' }}>Brand</div>
+                          <input value={amazonProduct.brand} onChange={e => setAmazonProduct(p => p && ({ ...p, brand: e.target.value }))}
+                            style={{ width: '100%', padding: '9px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '13px', outline: 'none' }} />
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '14px', marginBottom: '14px' }}>
+                        <div>
+                          <div style={{ fontSize: '12px', fontWeight: '500', color: '#666', marginBottom: '5px' }}>Category</div>
+                          <select value={amazonProduct.category} onChange={e => setAmazonProduct(p => p && ({ ...p, category: e.target.value }))}
+                            style={{ width: '100%', padding: '9px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '13px', outline: 'none', background: '#fff' }}>
+                            {categories.map(c => <option key={c}>{c}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '12px', fontWeight: '500', color: '#666', marginBottom: '5px' }}>Price (₹)</div>
+                          <input type="number" value={amazonProduct.price} onChange={e => setAmazonProduct(p => p && ({ ...p, price: Number(e.target.value) }))}
+                            style={{ width: '100%', padding: '9px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '13px', outline: 'none' }} />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '12px', fontWeight: '500', color: '#666', marginBottom: '5px' }}>Score / 10</div>
+                          <input type="number" min="0" max="10" step="0.1" value={amazonProduct.score} onChange={e => setAmazonProduct(p => p && ({ ...p, score: Number(e.target.value) }))}
+                            style={{ width: '100%', padding: '9px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '13px', outline: 'none' }} />
+                        </div>
+                      </div>
+
+                      <div style={{ marginBottom: '14px' }}>
+                        <div style={{ fontSize: '12px', fontWeight: '500', color: '#666', marginBottom: '5px' }}>Description</div>
+                        <textarea value={amazonProduct.description} onChange={e => setAmazonProduct(p => p && ({ ...p, description: e.target.value }))}
+                          style={{ width: '100%', padding: '9px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '13px', outline: 'none', minHeight: '70px', resize: 'vertical', fontFamily: 'inherit' }} />
+                      </div>
+
+                      {Object.keys(amazonProduct.specs).length > 0 && (
+                        <div style={{ marginBottom: '14px' }}>
+                          <div style={{ fontSize: '12px', fontWeight: '500', color: '#666', marginBottom: '8px' }}>Specifications ({Object.keys(amazonProduct.specs).length} found)</div>
+                          <div style={{ background: '#f8f8f6', borderRadius: '8px', border: '1px solid #eee', overflow: 'hidden', maxHeight: '220px', overflowY: 'auto' }}>
+                            {Object.entries(amazonProduct.specs).map(([key, val]) => (
+                              <div key={key} style={{ display: 'grid', gridTemplateColumns: '160px 1fr', borderBottom: '1px solid #eee', fontSize: '12px' }}>
+                                <div style={{ padding: '7px 10px', background: '#f0f0ee', color: '#555', fontWeight: '500' }}>{key}</div>
+                                <div style={{ padding: '7px 10px', color: '#1a1a1a' }}>{val}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {amazonProduct.reviews_count > 0 && (
+                        <div style={{ marginBottom: '14px' }}>
+                          <div style={{ fontSize: '12px', color: '#666' }}>
+                            ★ {amazonProduct.score}/10 · {amazonProduct.reviews_count.toLocaleString('en-IN')} ratings on Amazon
+                          </div>
+                        </div>
+                      )}
+
+                      <div style={{ marginBottom: '18px' }}>
+                        <div style={{ fontSize: '12px', fontWeight: '500', color: '#666', marginBottom: '8px' }}>Emoji icon</div>
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                          {emojis.map(e => (
+                            <div key={e} onClick={() => setAmazonProduct(p => p && ({ ...p, emoji: e }))}
+                              style={{ width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', border: `2px solid ${amazonProduct.emoji === e ? '#FF9900' : '#eee'}`, borderRadius: '8px', cursor: 'pointer', background: amazonProduct.emoji === e ? '#FFF3E0' : '#fff' }}>
+                              {e}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {amazonMessage && (
+                        <div style={{ background: amazonMessage.includes('Error') ? '#FCEBEB' : '#EAF3DE', color: amazonMessage.includes('Error') ? '#A32D2D' : '#3B6D11', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', marginBottom: '14px' }}>
+                          {amazonMessage}
+                        </div>
+                      )}
+
+                      <div style={{ display: 'flex', gap: '10px' }}>
+                        <button onClick={() => { setAmazonProduct(null); setAmazonUrl(''); setAmazonSelectedImage(''); setAmazonError('') }}
+                          style={{ padding: '10px 20px', border: '1px solid #ddd', borderRadius: '8px', background: '#fff', fontSize: '13px', cursor: 'pointer' }}>
+                          Clear
+                        </button>
+                        <button onClick={saveAmazonProduct} disabled={amazonSaving || !amazonProduct.name}
+                          style={{ flex: 1, padding: '10px', background: amazonSaving || !amazonProduct.name ? '#aaa' : '#FF9900', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '14px', cursor: amazonSaving || !amazonProduct.name ? 'not-allowed' : 'pointer', fontWeight: '500' }}>
+                          {amazonSaving ? 'Saving...' : '✓ Save Amazon product to database'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
