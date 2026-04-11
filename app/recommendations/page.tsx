@@ -10,6 +10,7 @@ type Product = {
   brand: string
   category: string
   emoji: string
+  image_url?: string
   score: number
   reviews_count: number
   price: number
@@ -120,8 +121,10 @@ export default function RecommendationsPage() {
                     ⭐ Top Pick
                   </div>
                 )}
-                <Link href={`/product/${product.id}`} style={{ background: '#f8f8f6', height: '120px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '52px', textDecoration: 'none', cursor: 'pointer' }}>
-                  {product.emoji}
+                <Link href={`/product/${product.id}`} style={{ background: '#f8f8f6', height: '150px', display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', cursor: 'pointer', overflow: 'hidden' }}>
+                  {product.image_url
+                    ? <img src={product.image_url} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '10px' }} />
+                    : <span style={{ fontSize: '52px' }}>{product.emoji}</span>}
                 </Link>
                 <div style={{ padding: '14px' }}>
                   <div style={{ fontSize: '11px', background: '#E6F1FB', color: '#185FA5', padding: '2px 8px', borderRadius: '4px', display: 'inline-block', marginBottom: '6px' }}>

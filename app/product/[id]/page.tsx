@@ -10,6 +10,7 @@ type Product = {
   brand: string
   category: string
   emoji: string
+  image_url?: string
   score: number
   reviews_count: number
   description: string
@@ -97,8 +98,10 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
       <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '20px' }}>
 
         <div className="product-hero">
-          <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: '16px', minHeight: '280px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '100px' }}>
-            {product.emoji}
+          <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: '16px', minHeight: '280px', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+            {product.image_url
+              ? <img src={product.image_url} alt={product.name} style={{ width: '100%', height: '280px', objectFit: 'contain', padding: '16px' }} />
+              : <span style={{ fontSize: '100px' }}>{product.emoji}</span>}
           </div>
 
           <div>

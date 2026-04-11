@@ -13,6 +13,7 @@ type Product = {
   brand: string
   category: string
   emoji: string
+  image_url?: string
   description: string
   score: number
   reviews_count: number
@@ -416,7 +417,9 @@ export default function AdminPage() {
                           <tr key={p.id} style={{ borderTop: '1px solid #f0f0f0' }}>
                             <td style={{ padding: '12px 16px' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                <span style={{ fontSize: '22px' }}>{p.emoji}</span>
+                                {p.image_url
+                                  ? <img src={p.image_url} alt={p.name} style={{ width: '40px', height: '40px', objectFit: 'contain', borderRadius: '6px', border: '1px solid #eee', background: '#f8f8f6' }} />
+                                  : <span style={{ fontSize: '22px' }}>{p.emoji}</span>}
                                 <div>
                                   <div style={{ fontWeight: '500', color: '#1a1a1a' }}>{p.name}</div>
                                   <div style={{ color: '#999', fontSize: '12px' }}>by {p.brand}</div>
