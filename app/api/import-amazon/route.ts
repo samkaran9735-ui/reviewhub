@@ -57,20 +57,34 @@ function extractBrand(html: string): string {
 }
 
 function extractPrice(html: string): number {
+  // Normalise encoded rupee so all patterns work consistently
+  const h = html.replace(/&#8377;/g, '₹').replace(/&rupee;/g, '₹').replace(/Rs\./g, '₹')
+
   const patterns = [
-    /class="[^"]*a-price-whole[^"]*"[^>]*>([\d,]+)/,
+    // a-price-whole — allow optional whitespace between tag and digits
+    /<span[^>]+class="[^"]*a-price-whole[^"]*"[^>]*>\s*([\d,]+)/,
+    /class="[^"]*a-price-whole[^"]*"[^>]*>\s*([\d,]+)/,
+    // corePriceDisplay block (current Amazon desktop layout)
+    /id="corePriceDisplay[^"]*"[\s\S]{0,600}?a-price-whole[^>]*>\s*([\d,]+)/,
+    // apex/priceToPay blocks
+    /class="[^"]*priceToPay[^"]*"[\s\S]{0,300}?₹\s*([\d,]+)/,
+    /class="[^"]*apexPriceToPay[^"]*"[\s\S]{0,300}?₹\s*([\d,]+)/,
+    // JSON embedded data
     /"priceAmount"\s*:\s*"?([\d.]+)"?/,
-    /"price"\s*:\s*"?₹?\s*([\d,]+(?:\.\d+)?)"?/,
-    /id="priceblock_ourprice"[^>]*>[\s\S]{0,10}₹\s*([\d,]+)/,
-    /id="priceblock_dealprice"[^>]*>[\s\S]{0,10}₹\s*([\d,]+)/,
-    /"displayPrice"\s*:\s*"(?:₹|Rs\.?|INR)\s*([\d,]+)"/i,
-    /class="[^"]*priceToPay[^"]*"[\s\S]{0,200}?₹\s*([\d,]+)/,
-    /class="[^"]*apexPriceToPay[^"]*"[\s\S]{0,200}?₹\s*([\d,]+)/,
     /"buyingPrice"\s*:\s*([\d.]+)/,
+    /"price"\s*:\s*\{"amount"\s*:\s*([\d.]+)/,
+    /"ourPrice"\s*:\s*"?₹?\s*([\d,]+)"/,
+    /"displayPrice"\s*:\s*"(?:₹|Rs\.?|INR)\s*([\d,]+)"/i,
+    // priceblock IDs (older Amazon)
+    /id="priceblock_ourprice"[^>]*>[\s\S]{0,20}₹\s*([\d,]+)/,
+    /id="priceblock_dealprice"[^>]*>[\s\S]{0,20}₹\s*([\d,]+)/,
+    // data attribute
+    /data-a-price="([\d.]+)"/,
+    // mobile Amazon — price in plain text near ₹
     /₹\s*([\d,]+(?:\.\d{2})?)/,
   ]
   for (const p of patterns) {
-    const m = html.match(p)
+    const m = h.match(p)
     if (m) {
       const val = Math.round(parseFloat(m[1].replace(/,/g, '')) || 0)
       if (val > 50 && val < 10000000) return val
