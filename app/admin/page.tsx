@@ -113,10 +113,28 @@ export default function AdminPage() {
     setAmazonMessage('')
     setAmazonSelectedImage('')
     try {
+      // Fetch from browser first — avoids Vercel server IP blocks by Amazon
+      let clientHtml = ''
+      const proxies = [
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(amazonUrl.trim())}`,
+        `https://api.allorigins.win/get?url=${encodeURIComponent(amazonUrl.trim())}`,
+        `https://corsproxy.io/?${encodeURIComponent(amazonUrl.trim())}`,
+      ]
+      for (const proxyUrl of proxies) {
+        try {
+          const r = await fetch(proxyUrl, { signal: AbortSignal.timeout(20000) })
+          if (r.ok) {
+            const ct = r.headers.get('content-type') || ''
+            const text = ct.includes('json') ? (await r.json()).contents || '' : await r.text()
+            if (text && text.length > 1000) { clientHtml = text; break }
+          }
+        } catch { /* try next */ }
+      }
+
       const res = await fetch('/api/import-amazon', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: amazonUrl.trim() }),
+        body: JSON.stringify({ url: amazonUrl.trim(), html: clientHtml || undefined }),
       })
       const data = await res.json()
       if (data.error && !data.partial) {

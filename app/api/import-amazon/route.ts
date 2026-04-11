@@ -323,9 +323,15 @@ async function fetchWithProxy(url: string): Promise<string> {
   throw new Error(`All fetch strategies failed. Last error: ${lastError}`)
 }
 
+function isCaptcha(html: string): boolean {
+  return html.includes('Type the characters') ||
+    html.includes('Enter the characters you see below') ||
+    (html.includes('captcha') && html.length < 50000)
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const { url } = await request.json()
+    const { url, html: clientHtml } = await request.json()
 
     if (!url || !url.startsWith('http')) {
       return Response.json({ error: 'Invalid URL' }, { status: 400 })
@@ -336,29 +342,33 @@ export async function POST(request: NextRequest) {
     }
 
     const asin = extractASIN(url)
-    // Normalize to clean Amazon India URL
     const cleanUrl = asin
       ? `https://www.amazon.in/dp/${asin}`
       : url.replace('amazon.com', 'amazon.in')
 
     let html: string
-    try {
-      html = await fetchWithProxy(cleanUrl)
-    } catch (e: unknown) {
-      return Response.json({
-        error: 'Amazon is blocking automated access. Please fill in the details manually below.',
-        asin,
-        partial: { name: '', brand: '', asin }
-      }, { status: 422 })
-    }
 
-    // Check if Amazon returned a CAPTCHA/robot check page
-    if (html.includes('Type the characters') || html.includes('Enter the characters you see below') || (html.includes('captcha') && html.length < 50000)) {
-      return Response.json({
-        error: 'Amazon returned a CAPTCHA. Please fill in details manually.',
-        asin,
-        partial: { name: '', brand: '', asin }
-      }, { status: 422 })
+    // Use HTML pre-fetched by the browser if provided (avoids server-side IP blocks)
+    if (clientHtml && clientHtml.length > 1000 && !isCaptcha(clientHtml)) {
+      html = clientHtml
+    } else {
+      try {
+        html = await fetchWithProxy(cleanUrl)
+      } catch (e: unknown) {
+        return Response.json({
+          error: 'Amazon is blocking automated access. Please fill in the details manually below.',
+          asin,
+          partial: { name: '', brand: '', asin }
+        }, { status: 422 })
+      }
+
+      if (isCaptcha(html)) {
+        return Response.json({
+          error: 'Amazon returned a CAPTCHA. Please fill in details manually.',
+          asin,
+          partial: { name: '', brand: '', asin }
+        }, { status: 422 })
+      }
     }
 
     const name = extractName(html)
